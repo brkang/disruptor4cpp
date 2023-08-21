@@ -26,7 +26,8 @@
 #ifndef DISRUPTOR_RING_BUFFER_H_  // NOLINT
 #define DISRUPTOR_RING_BUFFER_H_  // NOLINT
 
-#include <array>
+// #include <array>
+#include <vector>
 #include "utils.h"
 
 namespace disruptor {
@@ -48,7 +49,10 @@ class RingBuffer {
   // entries in the ring.
   // @param wait_strategy_option waiting strategy employed by
   // processors_to_track waiting in entries becoming available.
-  RingBuffer(const std::array<T, N>& events) : events_(events) {}
+  // RingBuffer(const std::array<T, N>& events) : events_(events) {}
+  RingBuffer(/*const std::vector<T>& events*/)/*: events_(events)*/ {
+      events_.resize(N);
+  }
 
   static_assert(((N > 0) && ((N & (~N + 1)) == N)),
                 "RingBuffer's size must be a positive power of 2");
@@ -64,7 +68,8 @@ class RingBuffer {
   }
 
  private:
-  std::array<T, N> events_;
+  // std::array<T, N> events_;
+  std::vector<T> events_;
 
   DISALLOW_COPY_MOVE_AND_ASSIGN(RingBuffer);
 };

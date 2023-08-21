@@ -23,42 +23,53 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 // THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#define BOOST_TEST_DYN_LINK
-#define BOOST_TEST_MODULE RingBufferTest
+#ifndef DISRUPTOR_SEQUENCE_BARRIER_H_  // NOLINT
+#define DISRUPTOR_SEQUENCE_BARRIER_H_  // NOLINT
 
-#define RING_BUFFER_SIZE 8
+#include <memory>
+#include <vector>
 
-#include <boost/test/unit_test.hpp>
-#include <disruptor/ring_buffer.h>
+#include "disruptor4cpp/wait_strategy.h"
+#include "disruptor4cpp/sequence.h"
 
 namespace disruptor {
-namespace test {
 
-struct RingBufferFixture {
-  RingBufferFixture() : ring_buffer(initArray()) {}
+template <typename W = kDefaultWaitStrategy>
+class SequenceBarrier {
+ public:
+  SequenceBarrier(W& wait_strategy, const Sequence& cursor,
+                  const std::vector<Sequence*>& dependents)
+      : wait_strategy_(wait_strategy), cursor_(cursor), dependents_(dependents), alerted_(false) {}
 
-  size_t f(const size_t i) { return i + 1; }
-
-  std::array<int, RING_BUFFER_SIZE> initArray() {
-    std::array<int, RING_BUFFER_SIZE> tmp;
-    for (size_t i = 0; i < RING_BUFFER_SIZE; i++) tmp[i] = f(i);
-    return tmp;
+  int64_t WaitFor(const int64_t& sequence) {
+    return wait_strategy_.WaitFor(sequence, cursor_, dependents_, alerted_);
   }
 
-  RingBuffer<int, RING_BUFFER_SIZE> ring_buffer;
+  template <class R, class P>
+  int64_t WaitFor(const int64_t& sequence,
+                  const std::chrono::duration<R, P>& timeout) {
+    return wait_strategy_.WaitFor(sequence, cursor_, dependents_, alerted_,
+                                  timeout);
+  }
+
+  int64_t get_sequence() const { return cursor_.sequence(); }
+
+  bool alerted() const {
+    return alerted_.load(std::memory_order::memory_order_acquire);
+  }
+
+  void set_alerted(bool alert) {
+    alerted_.store(alert, std::memory_order::memory_order_release);
+    wait_strategy_.SignalAllWhenBlocking();
+  }
+
+ private:
+  W& wait_strategy_;  //外部传入才能唤醒
+  const Sequence& cursor_;
+  std::vector<Sequence*> dependents_;
+  std::atomic<bool> alerted_;
 };
 
-BOOST_AUTO_TEST_SUITE(RingBufferBasic)
-
-BOOST_FIXTURE_TEST_CASE(VerifyWrapArround, RingBufferFixture) {
-  for (size_t i = 0; i < RING_BUFFER_SIZE * 2; i++)
-    BOOST_CHECK_EQUAL(ring_buffer[i], f(i % RING_BUFFER_SIZE));
-
-  for (size_t i = 0; i < RING_BUFFER_SIZE * 2; i++)
-    const auto& t = ring_buffer[i];
-}
-
-BOOST_AUTO_TEST_SUITE_END()
-
-};  // namespace test
 };  // namespace disruptor
+
+#endif  // DISRUPTOR_DEPENDENCY_BARRIER_H_ NOLINT

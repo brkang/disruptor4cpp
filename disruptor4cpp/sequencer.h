@@ -26,9 +26,9 @@
 #ifndef DISRUPTOR_SEQUENCER_H_  // NOLINT
 #define DISRUPTOR_SEQUENCER_H_  // NOLINT
 
-#include "disruptor/claim_strategy.h"
-#include "disruptor/wait_strategy.h"
-#include "disruptor/sequence_barrier.h"
+#include "disruptor4cpp/claim_strategy.h"
+#include "disruptor4cpp/wait_strategy.h"
+#include "disruptor4cpp/sequence_barrier.h"
 
 namespace disruptor {
 
@@ -37,9 +37,13 @@ namespace disruptor {
 template <typename T, size_t N = kDefaultRingBufferSize,
           typename C = kDefaultClaimStrategy, typename W = kDefaultWaitStrategy>
 class Sequencer {
+  public:
+      typedef T EventType;
+      typedef C	ClaimType;
+      typedef W	WaitType;
  public:
   // Construct a Sequencer with the selected strategies.
-  Sequencer(std::array<T, N> events) : ring_buffer_(events) {}
+  Sequencer(/*std::array<T, N> events*/) : ring_buffer_(/*events*/) {}
 
   // Set the sequences that will gate publishers to prevent the buffer
   // wrapping.
@@ -49,13 +53,21 @@ class Sequencer {
     gating_sequences_ = sequences;
   }
 
+  // Add the sequences that will gate publishers to prevent the buffer
+  // wrapping.
+  //
+  // @param sequences to be gated on.  
+  void add_gating_sequences(const std::vector<Sequence*>& sequences) {
+    gating_sequences_.insert(gating_sequences_.end(), sequences.begin(), sequences.end());
+  }
+
   // Create a {@link SequenceBarrier} that gates on the cursor and a list of
   // {@link Sequence}s.
   //
   // @param sequences_to_track this barrier will track.
   // @return the barrier gated as required.
-  SequenceBarrier<W> NewBarrier(const std::vector<Sequence*>& dependents) {
-    return SequenceBarrier<W>(cursor_, dependents);
+  SequenceBarrier<W>* NewBarrier(const std::vector<Sequence*>& dependents = {}) {
+    return new SequenceBarrier<W>(wait_strategy_, cursor_, dependents);
   }
 
   // Get the value of the cursor indicating the published sequence.
@@ -85,7 +97,7 @@ class Sequencer {
   // @param sequence to be published.
   void Publish(const int64_t& sequence, size_t delta = 1) {
     claim_strategy_.SynchronizePublishing(sequence, cursor_, delta);
-    const int64_t new_cursor = cursor_.IncrementAndGet(delta);
+    /*const int64_t new_cursor = */cursor_.IncrementAndGet(delta);
     wait_strategy_.SignalAllWhenBlocking();
   }
 

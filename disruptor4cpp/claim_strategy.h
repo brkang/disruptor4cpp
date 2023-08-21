@@ -28,8 +28,8 @@
 
 #include <thread>
 
-#include "disruptor/sequence.h"
-#include "disruptor/ring_buffer.h"
+#include "disruptor4cpp/sequence.h"
+#include "disruptor4cpp/ring_buffer.h"
 
 namespace disruptor {
 
@@ -61,8 +61,8 @@ class ClaimStrategy {
 */
 
 template <size_t N>
-class SingleThreadedStrategy;
-using kDefaultClaimStrategy = SingleThreadedStrategy<kDefaultRingBufferSize>;
+class MultiThreadedStrategy;
+using kDefaultClaimStrategy = MultiThreadedStrategy<kDefaultRingBufferSize>;
 
 // Optimised strategy can be used when there is a single publisher thread.
 template <size_t N = kDefaultRingBufferSize>
@@ -77,6 +77,7 @@ class SingleThreadedStrategy {
     const int64_t next_sequence = (last_claimed_sequence_ += delta);
     const int64_t wrap_point = next_sequence - N;
     if (last_consumer_sequence_ < wrap_point) {
+      //生产者不能超过最慢的消费者
       while (GetMinimumSequence(dependents) < wrap_point) {
         // TODO: configurable yield strategy
         std::this_thread::yield();
@@ -113,6 +114,14 @@ class MultiThreadedStrategy {
  public:
   MultiThreadedStrategy() {}
 
+  /*
+    0 1  2  3  4  5  6 7
+    8 9 10 11 12 13 14 15
+    最小消费者 12 生产者P1 15 delta=1
+    最快的生产者不能覆盖最慢的消费者
+    生产者-N即为最小的消费者
+  */
+  //last_claimed_sequence_ 最快的生产者 
   int64_t IncrementAndGet(const std::vector<Sequence*>& dependents,
                           size_t delta = 1) {
     const int64_t next_sequence = last_claimed_sequence_.IncrementAndGet(delta);
@@ -136,6 +145,13 @@ class MultiThreadedStrategy {
     return true;
   }
 
+  /*
+    0 1 2 3 4 5 6 7
+    cursor 1 P1 3 delta=2 P2 4 delta=1
+    如果P2先Publish 需要等待P1先发布 
+    最后增加cursor的值 发布给消费者（多个生产者会等待）
+  */
+  //sequence 已经占用的最大值 delta 此次增加的次数 cursor 生产者指针
   void SynchronizePublishing(const int64_t& sequence, const Sequence& cursor,
                              const size_t& delta) {
     int64_t my_first_sequence = sequence - delta;
@@ -147,8 +163,8 @@ class MultiThreadedStrategy {
   }
 
  private:
-  Sequence last_claimed_sequence_;
-  Sequence last_consumer_sequence_;
+  Sequence last_claimed_sequence_;    //最快的生产者
+  Sequence last_consumer_sequence_;   //最慢的消费者
 
   DISALLOW_COPY_MOVE_AND_ASSIGN(MultiThreadedStrategy);
 };

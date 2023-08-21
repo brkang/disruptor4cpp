@@ -34,8 +34,9 @@
 #define DISRUPTOR_SEQUENCE_H_  // NOLINT
 
 #include <atomic>
-
-#include "disruptor/utils.h"
+#include <vector>
+#include <climits>
+#include "disruptor4cpp/utils.h"
 
 namespace disruptor {
 
@@ -72,10 +73,16 @@ class Sequence {
   //
   // @param increment the {@link Sequence}.
   // @return the new value incremented.
-  int64_t IncrementAndGet(const int64_t& increment) {
+  int64_t IncrementAndGet(const int64_t& increment = 1) {
     return sequence_.fetch_add(increment,
                                std::memory_order::memory_order_release) +
            increment;
+  }
+
+  bool CompareAndSet(int64_t expected, int64_t next_sequence) {
+    return sequence_.compare_exchange_strong(expected, next_sequence,
+                                              std::memory_order_seq_cst,
+                                              std::memory_order_relaxed);
   }
 
  private:
@@ -89,7 +96,7 @@ class Sequence {
   DISALLOW_COPY_MOVE_AND_ASSIGN(Sequence);
 };
 
-int64_t GetMinimumSequence(const std::vector<Sequence*>& sequences) {
+static inline int64_t GetMinimumSequence(const std::vector<Sequence*>& sequences) {
   int64_t minimum = LONG_MAX;
 
   for (Sequence* sequence_ : sequences) {

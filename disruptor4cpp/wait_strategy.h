@@ -26,14 +26,16 @@
 #ifndef DISRUPTOR_WAITSTRATEGY_H_  // NOLINT
 #define DISRUPTOR_WAITSTRATEGY_H_  // NOLINT
 
-#include <sys/time.h>
+#include <time.h>
 
 #include <chrono>
 #include <thread>
 #include <condition_variable>
 #include <vector>
+#include <functional>
+#include <mutex>
 
-#include "disruptor/sequence.h"
+#include "disruptor4cpp/sequence.h"
 
 namespace disruptor {
 
@@ -138,8 +140,9 @@ class BusySpinStrategy {
                   const std::vector<Sequence*>& dependents,
                   const std::atomic<bool>& alerted) {
     int64_t available_sequence = kInitialCursorValue;
+    //dependents为空时取cursor.sequence()，否则取dependent中最小值
     const auto min_sequence = buildMinSequenceFunction(cursor, dependents);
-
+    //等待 sequence >= 依赖的最小值则继续
     while ((available_sequence = min_sequence()) < sequence) {
       if (alerted.load()) return kAlertedSignal;
     }
@@ -350,7 +353,7 @@ class BlockingStrategy {
       }
     }
 
-    // Now we wait on dependents.
+    // Now we wait on dependents. //注意这里会有busyspin event_processor是批量处理事件
     if (dependents.size()) {
       while ((available_sequence = GetMinimumSequence(dependents)) < sequence) {
         if (alerted) return kAlertedSignal;
